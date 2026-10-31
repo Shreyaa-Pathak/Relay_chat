@@ -7,9 +7,15 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "files": ["dist", "drizzle"],
+  "files": [
+    "dist",
+    "drizzle"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx watch --clear-screen=false src/dev.ts",
@@ -23,21 +29,21 @@
   },
   "dependencies": {
     "@relay/shared": "workspace:*",
-    "@vercel/functions": "3.10.4",
+    "@vercel/functions": "3.10.5",
     "bcryptjs": "3.0.3",
-    "drizzle-orm": "0.44.7",
+    "drizzle-orm": "0.45.4",
     "ioredis": "5.8.2",
     "jose": "6.1.2",
     "pg": "8.16.3",
-    "ws": "8.18.3",
-    "zod": "3.25.76"
+    "ws": "8.22.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/pg": "8.15.6",
     "@types/ws": "8.18.1",
-    "drizzle-kit": "0.31.7",
+    "drizzle-kit": "0.31.11",
     "tsx": "4.20.6",
     "typescript": "5.9.3",
-    "vitest": "3.2.4"
+    "vitest": "4.1.12"
   }
 }
