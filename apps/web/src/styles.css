@@ -1,0 +1,82 @@
+@import "tailwindcss";
+@import "@fontsource-variable/manrope";
+
+/* Relay design tokens (source of truth: project brief). */
+:root {
+  --green-500: #7ad6b0;
+  --green-600: #5fc49b;
+  --green-100: #d6f2e6;
+  --ink: #1f1a17;
+  --paper: #f5f2ef;
+  --surface: #ece8e4;
+  --blush: #f4b8b0;
+  --lavender: #b9a6f2;
+  --amber: #f2c14e;
+  /* Derived: muted ink for secondary text (contrast 7.9:1 on paper). */
+  --ink-muted: #5a524c;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-mint: var(--green-500);
+  --color-mint-strong: var(--green-600);
+  --color-mint-tint: var(--green-100);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-blush: var(--blush);
+  --color-lavender: var(--lavender);
+  --color-amber: var(--amber);
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --shadow-sticker: 3px 3px 0 var(--ink);
+  --shadow-sticker-sm: 2px 2px 0 var(--ink);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* One visible focus treatment everywhere. */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* The soft blush glow from the brief, used once, behind the auth screens. */
+.relay-glow {
+  background:
+    radial-gradient(60% 50% at 80% 10%, color-mix(in oklab, var(--blush) 55%, transparent), transparent 70%),
+    var(--paper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes relay-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.typing-dot { animation: relay-pulse 1.2s ease-in-out infinite; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
