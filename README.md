@@ -75,3 +75,8 @@ if any are missing, the app shows a setup screen naming them (values are never s
 - **Missing features:** no message editing or deletion, no creating channels from the UI (seeded and
   SQL-created only), no file uploads, and no Storybook (components live in `apps/web/src/components/ui`).
 - **Avatars:** new users get lavender or amber avatars only.
+
+## License
+
+Copyright (c) 2026 Shreya Pathak. All rights reserved. This code is shared for viewing only; it may
+not be copied, modified, redistributed or deployed without written permission. See `LICENSE`.
