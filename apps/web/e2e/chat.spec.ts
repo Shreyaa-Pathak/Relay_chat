@@ -112,3 +112,15 @@ test("wrong password shows a clear error", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("alert")).toHaveText("Email or password is incorrect");
 });
+
+test("reload restores the session when only the access cookie has expired", async ({ browser }) => {
+  const user = await newUser(browser, "Session restore");
+  const text = `Session continuity ${Date.now()}`;
+  await send(user.page, text);
+  await expect(user.page.getByText("Sent").last()).toBeVisible();
+  await user.context.clearCookies({ name: "relay_at" });
+  await user.page.reload();
+  await expect(user.page.getByRole("log").getByText(text)).toBeVisible();
+  await expect(user.page).toHaveURL(/\/c\/relay\/general$/);
+  await user.context.close();
+});

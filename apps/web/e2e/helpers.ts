@@ -10,7 +10,7 @@ export async function newUser(browser: Browser, name: string, contextOpts: Param
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/c\/general$/);
+  await expect(page).toHaveURL(/\/c\/relay\/general$/);
   await expect(page.getByRole("heading", { name: /general/ })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "Connected" }).first()).toBeAttached();
   return { context, page, email };

@@ -6,7 +6,8 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const DB = process.env.E2E_DATABASE_URL ?? "postgres://relay:relay@localhost:5432/relay_e2e";
 const REDIS = process.env.E2E_REDIS_URL ?? "redis://localhost:6379";
-const PORT = 4173;
+const PORT = Number(process.env.E2E_PORT ?? 4173);
+const API_PORT = Number(process.env.E2E_API_PORT ?? 3001);
 
 export default defineConfig({
   testDir: "e2e",
@@ -16,7 +17,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
   globalSetup: "./e2e/global-setup.ts",
-  use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure", screenshot: "only-on-failure" },
+  use: { baseURL: `http://localhost:${PORT}`, channel: process.env.E2E_BROWSER_CHANNEL, trace: "retain-on-failure", screenshot: "only-on-failure" },
   projects: [
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } }, testIgnore: /mobile/ },
     { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /mobile/ },
@@ -24,19 +25,19 @@ export default defineConfig({
   webServer: [
     {
       command: "node ../../packages/server/dist/dev.js",
-      url: "http://localhost:3001/api/v1/health",
+      url: `http://localhost:${API_PORT}/api/v1/health`,
       reuseExistingServer: false,
       env: {
         DATABASE_URL: DB,
         REDIS_URL: REDIS,
         AUTH_SECRET: "e2e-secret-e2e-secret-e2e-secret-e2e",
         APP_URL: `http://localhost:${PORT}`,
-        PORT: "3001",
+        PORT: String(API_PORT),
         LOG_LEVEL: "warn",
         REGISTER_LIMIT_PER_HOUR: "1000",
         NODE_ENV: "test",
       },
     },
-    { command: `pnpm exec vite preview --port ${PORT} --strictPort`, url: `http://localhost:${PORT}`, reuseExistingServer: false },
+    { command: `pnpm exec vite preview --port ${PORT} --strictPort`, url: `http://localhost:${PORT}`, reuseExistingServer: false, env: { RELAY_API_ORIGIN: `http://localhost:${API_PORT}` } },
   ],
 });
