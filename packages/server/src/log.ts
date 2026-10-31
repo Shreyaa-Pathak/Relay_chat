@@ -6,7 +6,14 @@ const REDACT = new Set(["password", "passwordHash", "token", "accessToken", "ref
 
 function redact(value: unknown, depth = 0): unknown {
   if (depth > 4 || value === null || typeof value !== "object") return value;
-  if (value instanceof Error) return { name: value.name, message: value.message, stack: value.stack?.split("\n").slice(0, 6).join("\n") };
+  if (value instanceof Error) {
+    // ORM wrapper messages embed SQL parameters, including message bodies and account data.
+    if (value.message.startsWith("Failed query:")) {
+      const code = (value.cause as { code?: unknown } | undefined)?.code;
+      return { name: value.name, message: "Database query failed", ...(typeof code === "string" ? { code } : {}) };
+    }
+    return { name: value.name, message: value.message, stack: value.stack?.split("\n").slice(0, 6).join("\n") };
+  }
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value)) out[k] = REDACT.has(k) ? "[redacted]" : redact(v, depth + 1);

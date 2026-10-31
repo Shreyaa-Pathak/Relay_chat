@@ -3,15 +3,16 @@ import { z } from "zod";
 const csv = z
   .string()
   .optional()
-  .transform((s) => (s ? s.split(",").map((x) => x.trim()).filter(Boolean) : []));
+  .transform((s) => (s ? s.split(",").map((x) => x.trim()).filter(Boolean) : []))
+  .pipe(z.array(z.string().url("Enter valid trusted origins").regex(/^https?:\/\//, "Trusted origins must use http:// or https://")));
 
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-    DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a postgres:// connection string (use Neon's pooled URL on Vercel)" }),
-    REDIS_URL: z.string().optional(),
+    DATABASE_URL: z.string().url({ message: "DATABASE_URL must be a postgres:// connection string (use Neon's pooled URL on Vercel)" }).regex(/^postgres(?:ql)?:\/\//, "DATABASE_URL must use postgres:// or postgresql://"),
+    REDIS_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url("REDIS_URL must be a Redis TCP URL").regex(/^rediss?:\/\//, "REDIS_URL must use redis:// or rediss://, not a REST endpoint").optional()),
     AUTH_SECRET: z.string().min(32, "AUTH_SECRET must be at least 32 characters (generate with: openssl rand -base64 48)"),
-    APP_URL: z.string().url({ message: "APP_URL must be the public origin, e.g. https://relay.example.vercel.app" }),
+    APP_URL: z.string().url({ message: "APP_URL must be the public origin, e.g. https://relay.example.vercel.app" }).regex(/^https?:\/\//, "APP_URL must use http:// or https://"),
     TRUSTED_ORIGINS: csv,
     /** Server closes each WebSocket after this long. Vercel Hobby functions stop at 300 s. */
     WS_MAX_CONNECTION_MS: z.coerce.number().int().min(10_000).max(3_600_000).default(290_000),
@@ -25,6 +26,9 @@ const EnvSchema = z
     DB_POOL_MAX: z.coerce.number().int().min(1).max(50).default(5),
   })
   .superRefine((env, ctx) => {
+    if (env.NODE_ENV === "production" && env.AUTH_SECRET === "change-me-to-a-long-random-string-of-at-least-32-chars") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["AUTH_SECRET"], message: "Replace the example AUTH_SECRET with a randomly generated secret before deployment." });
+    }
     if (!env.REDIS_URL && env.RELAY_ALLOW_MEMORY_BUS !== "1") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

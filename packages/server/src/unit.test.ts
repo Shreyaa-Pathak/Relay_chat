@@ -13,6 +13,16 @@ const base = {
 };
 
 describe("env", () => {
+  it.each([
+    { TRUSTED_ORIGINS: "not-a-url" },
+    { REDIS_URL: "https://redis-rest.example.com" },
+    { DATABASE_URL: "https://not-postgres.example.com" },
+  ])("reports invalid connection/origin configuration without crashing: %j", async (invalid) => {
+    expect(() => loadEnv({ ...base, ...invalid })).toThrow(ConfigError);
+  });
+  it("refuses the published example signing secret in production", () => {
+    expect(() => loadEnv({ ...base, NODE_ENV: "production", AUTH_SECRET: "change-me-to-a-long-random-string-of-at-least-32-chars" })).toThrow(/Replace the example AUTH_SECRET/);
+  });
   it("derives trusted origins and secure cookies", () => {
     const env = loadEnv({ ...base, TRUSTED_ORIGINS: "https://preview.example.com/, http://localhost:5173" });
     expect(env.trustedOrigins).toEqual(["https://relay.example.com", "https://preview.example.com", "http://localhost:5173"]);
@@ -47,6 +57,14 @@ describe("resolvePath", () => {
 });
 
 describe("logger", () => {
+  it("does not leak database query parameters through wrapped errors", () => {
+    const lines: string[] = [];
+    const log = createLogger("error", {}, (line) => lines.push(line));
+    const cause = Object.assign(new Error("Database failure"), { code: "42P01" });
+    log.error("failed", { err: new Error("Failed query: insert into messages values ($1)\nparams: private conversation", { cause }) });
+    expect(lines[0]).not.toContain("private conversation");
+    expect(JSON.parse(lines[0]!).err).toMatchObject({ message: "Database query failed", code: "42P01" });
+  });
   it("redacts secrets and message bodies", () => {
     const lines: string[] = [];
     const log = createLogger("debug", { svc: "t" }, (l) => lines.push(l));
