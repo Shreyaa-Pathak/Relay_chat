@@ -30,7 +30,7 @@ function Field({ label, id, error, ...rest }: { label: string; id: string; error
 
 function AuthLayout({ title, children, footer }: { title: string; children: React.ReactNode; footer: React.ReactNode }) {
   return (
-    <main className="relay-glow flex min-h-full items-center justify-center px-4 py-10">
+    <main className="flex min-h-full items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <Wordmark className="mb-1 text-6xl" />
         <p className="mb-8 text-ink-muted">Real-time chat your community owns.</p>

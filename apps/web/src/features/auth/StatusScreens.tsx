@@ -16,7 +16,7 @@ export function LoadingScreen() {
 
 export function SetupScreen({ issues, onRetry }: { issues: { variable: string; message: string }[]; onRetry: () => void }) {
   return (
-    <main className="relay-glow flex min-h-full items-center justify-center px-4 py-10">
+    <main className="flex min-h-full items-center justify-center px-4 py-10">
       <section className="w-full max-w-xl rounded-3xl border-2 border-ink bg-paper p-6 shadow-sticker">
         <Wordmark className="mb-4 text-4xl" />
         <h1 className="mb-2 text-2xl font-extrabold">The server needs configuration</h1>
@@ -42,7 +42,7 @@ export function SetupScreen({ issues, onRetry }: { issues: { variable: string; m
 
 export function UnreachableScreen({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <main className="relay-glow flex min-h-full items-center justify-center px-4 py-10">
+    <main className="flex min-h-full items-center justify-center px-4 py-10">
       <section className="w-full max-w-md rounded-3xl border-2 border-ink bg-paper p-6 shadow-sticker">
         <Wordmark className="mb-4 text-4xl" />
         <h1 className="mb-2 text-2xl font-extrabold">Can't reach the Relay server</h1>

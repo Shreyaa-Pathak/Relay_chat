@@ -55,13 +55,6 @@ body {
   border-radius: 6px;
 }
 
-/* The soft blush glow from the brief, used once, behind the auth screens. */
-.relay-glow {
-  background:
-    radial-gradient(60% 50% at 80% 10%, color-mix(in oklab, var(--blush) 55%, transparent), transparent 70%),
-    var(--paper);
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
