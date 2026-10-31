@@ -7,6 +7,7 @@ import { FakeSocket, ME, msg, OTHER, ROOM } from "../test/fakeSocket";
 
 const apiMock = vi.hoisted(() => ({
   rooms: vi.fn(),
+  communities: vi.fn(),
   history: vi.fn(),
   after: vi.fn(),
   replies: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock("../lib/api", () => ({
   refreshSession: vi.fn(async () => true),
 }));
 
-const room = { id: ROOM, slug: "general", name: "general", topic: null, isPrivate: false, isMember: true, lastSeq: 0, memberCount: 2 };
+const room = { communityId: "00000000-0000-4000-8000-000000000010", id: ROOM, slug: "general", name: "general", topic: null, isPrivate: false, isMember: true, lastSeq: 0, memberCount: 2 };
 let store: UseBoundStore<StoreApi<ChatState>>;
 let ctl: ChatController;
 const flush = () => vi.advanceTimersByTimeAsync(0);
@@ -29,6 +30,7 @@ beforeEach(async () => {
   FakeSocket.all = [];
   for (const f of Object.values(apiMock)) f.mockReset();
   apiMock.rooms.mockResolvedValue({ rooms: [room] });
+  apiMock.communities.mockResolvedValue({ communities: [] });
   store = create<ChatState>(() => initialChatState());
   ctl = new ChatController(ME, { onSignedOut: vi.fn() }, { url: "ws://x", createSocket: (u) => new FakeSocket(u), rand: () => 0.5 }, store);
   await ctl.start();
@@ -42,6 +44,23 @@ const sock = () => FakeSocket.all.at(-1)!;
 const tl = () => timeline(store.getState().messages[ROOM]!);
 
 describe("ChatController", () => {
+  it("subscribes to a newly created channel when the room list refreshes", async () => {
+    sock().hello();
+    const created = { ...room, id: OTHER.id, slug: "team", name: "Team" };
+    apiMock.rooms.mockResolvedValue({ rooms: [room, created] });
+    await ctl.loadRooms();
+    expect(sock().sentOfType("room.subscribe").at(-1)).toEqual({ type: "room.subscribe", roomIds: [created.id] });
+    expect(store.getState().rooms).toContainEqual(created);
+  });
+
+  it("refreshes the channel list after access is revoked by the owner", async () => {
+    sock().hello();
+    apiMock.rooms.mockResolvedValue({ rooms: [] });
+    sock().push({ type: "membership.revoked", roomId: ROOM, userId: ME.id });
+    await flush();
+    expect(store.getState().rooms).toEqual([]);
+  });
+
   it("subscribes after the handshake, then loads history up to the subscribed seq", async () => {
     apiMock.history.mockResolvedValue({ messages: [msg(1), msg(2)], hasMore: false, roomLastSeq: 2 });
     sock().hello();

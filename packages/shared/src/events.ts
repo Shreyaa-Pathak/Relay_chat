@@ -27,7 +27,7 @@ export const RoomUnsubscribeEvent = z.object({
   roomIds: z.array(uuid).min(1).max(200),
 });
 
-export const PresenceSnapshotRequest = z.object({ type: z.literal("presence.request") });
+export const PresenceSnapshotRequest = z.object({ type: z.literal("presence.request"), communityId: uuid.optional() });
 
 /** Sent right before a client-initiated planned reconnect. */
 export const ByeEvent = z.object({ type: z.literal("bye"), reason: z.enum(["reconnect", "logout", "leave"]) });
@@ -106,11 +106,13 @@ export const PresenceUpdateEvent = z.object({
   type: z.literal("presence.update"),
   state: z.enum(["online", "offline"]),
   entry: PresenceEntry,
+  communityId: uuid.optional(),
 });
 
 export const PresenceSnapshotEvent = z.object({
   type: z.literal("presence.snapshot"),
   entries: z.array(PresenceEntry),
+  communityId: uuid.optional(),
   serverTime: z.number(),
 });
 
@@ -135,8 +137,10 @@ export const ProtocolErrorEvent = z.object({
 });
 
 export const PongEvent = z.object({ type: z.literal("pong"), t: z.number(), serverTime: z.number() });
+export const CommunityChangedEvent = z.object({ type: z.literal("community.changed"), communityId: uuid });
 
 export const ServerEvent = z.discriminatedUnion("type", [
+  CommunityChangedEvent,
   HelloEvent,
   RoomSubscribedEvent,
   MessageAckEvent,
@@ -160,11 +164,14 @@ export type PresenceUpdateEvent = z.infer<typeof PresenceUpdateEvent>;
 export type PresenceSnapshotEvent = z.infer<typeof PresenceSnapshotEvent>;
 
 /** Events that travel through the Bus between instances. */
+export const AccountRevokedEvent = z.object({ type: z.literal("account.revoked"), userId: uuid });
 export const BusEvent = z.discriminatedUnion("type", [
+  CommunityChangedEvent,
   MessageNewEvent,
   TypingEvent,
   PresenceUpdateEvent,
   MembershipRevokedEvent,
+  AccountRevokedEvent,
 ]);
 export type BusEvent = z.infer<typeof BusEvent>;
 

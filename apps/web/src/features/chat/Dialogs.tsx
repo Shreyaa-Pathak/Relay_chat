@@ -6,9 +6,11 @@ import { Avatar } from "../../components/ui/Avatar";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { useController } from "./ChatContext";
+import { channelPath } from "../../lib/paths";
 
-export function BrowseChannelsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const rooms = useChat((s) => s.rooms);
+export function BrowseChannelsDialog({ communityId, open, onOpenChange }: { communityId: string; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const rooms = useChat((s) => s.rooms).filter((r) => r.communityId === communityId);
+  const community = useChat((s) => s.communities.find((c) => c.id === communityId));
   const ctl = useController();
   const nav = useNavigate();
   const [busy, setBusy] = useState<string | null>(null);
@@ -28,7 +30,7 @@ export function BrowseChannelsDialog({ open, onOpenChange }: { open: boolean; on
                 size="sm"
                 onClick={() => {
                   onOpenChange(false);
-                  nav(`/c/${r.slug}`);
+                  if (community) nav(channelPath(community.slug, r.slug));
                 }}
               >
                 Open
@@ -44,7 +46,7 @@ export function BrowseChannelsDialog({ open, onOpenChange }: { open: boolean; on
                     await ctl.join(r.id);
                     toast(`Joined #${r.name}`, "success");
                     onOpenChange(false);
-                    nav(`/c/${r.slug}`);
+                    if (community) nav(channelPath(community.slug, r.slug));
                   } catch (e) {
                     toast((e as Error).message, "error");
                   } finally {

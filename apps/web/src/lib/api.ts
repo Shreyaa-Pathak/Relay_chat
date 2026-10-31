@@ -1,4 +1,4 @@
-import type { HistoryPage, Me, Message, Room } from "@relay/shared";
+import type { AdminMember, Community, CreateCommunityInput, CreateRoomInput, HistoryPage, Me, Message, Room } from "@relay/shared";
 
 export class ApiError extends Error {
   constructor(
@@ -70,6 +70,22 @@ async function request<T>(method: string, path: string, body?: Json, retried = f
 }
 
 export const api = {
+  communities: () => request<{ communities: Community[] }>("GET", "/communities"),
+  joinCommunity: (id: string) => request("POST", `/communities/${id}/join`),
+  allCommunities: () => request<{ communities: Community[] }>("GET", "/superadmin/communities"),
+  createCommunity: (input: CreateCommunityInput) => request<{ id: string }>("POST", "/superadmin/communities", input),
+  updateCommunity: (id: string, input: { isSuspended?: boolean; ownerEmail?: string }) => request("PATCH", `/superadmin/communities/${id}`, input),
+  platformMembers: () => request<{ members: Pick<Me, "id" | "email" | "displayName" | "role" | "status">[] }>("GET", "/superadmin/members"),
+  suspendAccount: (id: string, status: "active" | "blocked") => request("PATCH", `/superadmin/members/${id}`, { status }),
+  adminMembers: (communityId: string) => request<{ members: AdminMember[]; invitations: { email: string }[] }>("GET", `/communities/${communityId}/admin/members`),
+  adminRooms: (communityId: string) => request<{ rooms: Room[] }>("GET", `/communities/${communityId}/admin/rooms`),
+  invite: (communityId: string, email: string) => request<{ token: string }>("POST", `/communities/${communityId}/admin/invitations`, { email }),
+  acceptInvite: (token: string) => request<{ community: { id: string; slug: string } }>("POST", "/invitations/accept", { token }),
+  revokeInvite: (communityId: string, email: string) => request("DELETE", `/communities/${communityId}/admin/invitations`, { email }),
+  moderate: (communityId: string, id: string, status: Me["status"]) => request("PATCH", `/communities/${communityId}/admin/members/${id}`, { status }),
+  createRoom: (communityId: string, input: CreateRoomInput) => request<{ id: string }>("POST", `/communities/${communityId}/admin/rooms`, input),
+  deleteRoom: (communityId: string, id: string) => request("DELETE", `/communities/${communityId}/admin/rooms/${id}`),
+  channelMember: (communityId: string, roomId: string, userId: string, add: boolean) => request(add ? "PUT" : "DELETE", `/communities/${communityId}/admin/rooms/${roomId}/members/${userId}`),
   health: () => request<{ ok: boolean }>("GET", "/health"),
   me: () => request<{ user: Me }>("GET", "/auth/me"),
   login: (email: string, password: string) => request<{ user: Me }>("POST", "/auth/login", { email, password }),

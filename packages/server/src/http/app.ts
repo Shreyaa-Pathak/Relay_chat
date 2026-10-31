@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { z } from "zod";
-import { HistoryQuery, LIMITS, LoginInput, RegisterInput, topics, uuid } from "@relay/shared";
+import { AcceptInviteInput, CreateCommunityInput, CommunitySettingsInput, CreateRoomInput, InviteInput, MemberStatusInput, HistoryQuery, LIMITS, LoginInput, RegisterInput, topics, uuid } from "@relay/shared";
+import { acceptInvitation, assertActive, assertOwner, assertSuperadmin, createRoom, deleteRoom, inviteMember, listMembers, setChannelMember, setMemberStatus } from "../repo/admin.js";
+import { createCommunity, joinCommunity, listCommunities, updateCommunity } from "../repo/communities.js";
+import { sql } from "drizzle-orm";
 import type { Relay } from "../context.js";
 import { AppError } from "../errors.js";
 import { hashPassword, verifyPassword } from "../auth/password.js";
@@ -27,7 +30,7 @@ export function isTrustedOrigin(relay: Relay, origin: string | undefined): boole
   return !!origin && relay.env.trustedOrigins.includes(origin);
 }
 
-function parse<T>(schema: z.ZodType<T>, data: unknown): T {
+function parse<T extends z.ZodTypeAny>(schema: T, data: unknown): z.output<T> {
   const r = schema.safeParse(data);
   if (!r.success) {
     throw new AppError("validation", r.error.issues[0]?.message ?? "Invalid input", r.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })));
@@ -60,9 +63,10 @@ export function createApi(relay: Relay) {
   ];
   const clearAuth = () => [clearCookie(ACCESS_COOKIE, "/", env.secureCookies), clearCookie(REFRESH_COOKIE, REFRESH_COOKIE_PATH, env.secureCookies)];
 
-  async function requireUser(req: Req): Promise<string> {
+  async function requireUser(req: Req, active = true): Promise<string> {
     const userId = await verifyAccessToken(env.AUTH_SECRET, parseCookies(req.raw)[ACCESS_COOKIE]);
     if (!userId) throw new AppError("unauthorized", "Sign in to continue");
+    if (active) await assertActive(db, userId);
     return userId;
   }
 
@@ -115,10 +119,142 @@ export function createApi(relay: Relay) {
   });
 
   r.add("GET", "/auth/me", async (req) => {
-    const userId = await requireUser(req);
+    const userId = await requireUser(req, false);
     const user = await getMe(db, userId);
     if (!user) throw new AppError("unauthorized", "Account not found");
     return json(200, { user });
+  });
+
+  async function requireOwner(req: Req) {
+    const userId = await requireUser(req);
+    await assertOwner(db, userId, parse(uuid, req.params.communityId));
+    limitWrite(req, userId);
+    return userId;
+  }
+
+  function limitWrite(req: Req, userId: string) {
+    if (req.method !== "GET" && !writeLimiter.take(userId)) throw new AppError("rate_limited", "Slow down a little");
+  }
+
+  async function requireSuperadmin(req: Req) {
+    const userId = await requireUser(req);
+    await assertSuperadmin(db, userId);
+    limitWrite(req, userId);
+    return userId;
+  }
+
+  const changed = (communityId: string) => publishWithRetry(relay.bus, topics.presence, { type: "community.changed", communityId });
+
+  r.add("POST", "/invitations/accept", async (req) => {
+    const userId = await requireUser(req);
+    limitWrite(req, userId);
+    const input = parse(AcceptInviteInput, await req.body());
+    const community = await acceptInvitation(db, userId, input.token);
+    await changed(community.id);
+    return json(200, { community });
+  });
+
+  r.add("GET", "/communities", async (req) => json(200, { communities: await listCommunities(db, await requireUser(req)) }));
+  r.add("POST", "/communities/:communityId/join", async (req) => {
+    const userId = await requireUser(req);
+    limitWrite(req, userId);
+    const communityId = parse(uuid, req.params.communityId);
+    await joinCommunity(db, communityId, userId);
+    await changed(communityId);
+    return json(200, { ok: true });
+  });
+  r.add("GET", "/superadmin/communities", async (req) => {
+    const userId = await requireSuperadmin(req);
+    return json(200, { communities: await listCommunities(db, userId, true) });
+  });
+  r.add("POST", "/superadmin/communities", async (req) => {
+    await requireSuperadmin(req);
+    const id = await createCommunity(db, parse(CreateCommunityInput, await req.body()));
+    await changed(id);
+    return json(201, { id });
+  });
+  r.add("PATCH", "/superadmin/communities/:communityId", async (req) => {
+    await requireSuperadmin(req);
+    const communityId = parse(uuid, req.params.communityId);
+    await updateCommunity(db, communityId, parse(CommunitySettingsInput, await req.body()));
+    await changed(communityId);
+    return json(200, { ok: true });
+  });
+  r.add("GET", "/superadmin/members", async (req) => {
+    await requireSuperadmin(req);
+    const members = await db.execute(sql`select id, email, display_name as "displayName", role, status from users order by created_at, id`);
+    return json(200, { members: members.rows });
+  });
+  r.add("PATCH", "/superadmin/members/:id", async (req) => {
+    await requireSuperadmin(req);
+    const userId = parse(uuid, req.params.id);
+    const input = parse(z.object({ status: z.enum(["active", "blocked"]) }), await req.body());
+    await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`update users set status = ${input.status} where id = ${userId} and role <> 'superadmin' returning id`);
+      if (!result.rows.length) throw new AppError("forbidden", "Superadmins cannot be suspended, or this account does not exist");
+      if (input.status === "blocked") await tx.execute(sql`update sessions set revoked_at = now() where user_id = ${userId} and revoked_at is null`);
+    });
+    if (input.status === "blocked") await publishWithRetry(relay.bus, topics.presence, { type: "account.revoked", userId });
+    return json(200, { ok: true });
+  });
+
+  r.add("GET", "/communities/:communityId/admin/members", async (req) => {
+    await requireOwner(req);
+    const communityId = parse(uuid, req.params.communityId);
+    const invitations = await db.execute(sql`select email from invitations where community_id = ${communityId} order by created_at`);
+    return json(200, { members: await listMembers(db, communityId), invitations: invitations.rows });
+  });
+  r.add("GET", "/communities/:communityId/admin/rooms", async (req) => {
+    const userId = await requireOwner(req);
+    return json(200, { rooms: await listRooms(db, userId, true, parse(uuid, req.params.communityId)) });
+  });
+  r.add("POST", "/communities/:communityId/admin/invitations", async (req) => {
+    await requireOwner(req);
+    const communityId = parse(uuid, req.params.communityId);
+    const input = parse(InviteInput, await req.body());
+    const token = await inviteMember(db, communityId, input.email);
+    return json(201, { token });
+  });
+  r.add("DELETE", "/communities/:communityId/admin/invitations", async (req) => {
+    await requireOwner(req);
+    const input = parse(InviteInput, await req.body());
+    await db.execute(sql`delete from invitations where community_id = ${parse(uuid, req.params.communityId)} and email = ${input.email}`);
+    return json(200, { ok: true });
+  });
+  r.add("PATCH", "/communities/:communityId/admin/members/:id", async (req) => {
+    await requireOwner(req);
+    const communityId = parse(uuid, req.params.communityId);
+    const userId = parse(uuid, req.params.id);
+    const input = parse(MemberStatusInput, await req.body());
+    const roomIds = await setMemberStatus(db, communityId, userId, input.status);
+    for (const roomId of roomIds) await publishWithRetry(relay.bus, topics.room(roomId), { type: "membership.revoked", roomId, userId });
+    await changed(communityId);
+    return json(200, { ok: true });
+  });
+  r.add("POST", "/communities/:communityId/admin/rooms", async (req) => {
+    const userId = await requireOwner(req);
+    const communityId = parse(uuid, req.params.communityId);
+    const id = await createRoom(db, communityId, userId, parse(CreateRoomInput, await req.body()));
+    await changed(communityId);
+    return json(201, { id });
+  });
+  r.add("DELETE", "/communities/:communityId/admin/rooms/:id", async (req) => {
+    await requireOwner(req);
+    const communityId = parse(uuid, req.params.communityId);
+    const roomId = parse(uuid, req.params.id);
+    for (const userId of await deleteRoom(db, communityId, roomId)) await publishWithRetry(relay.bus, topics.room(roomId), { type: "membership.revoked", roomId, userId });
+    await changed(communityId);
+    return json(200, { ok: true });
+  });
+  for (const method of ["PUT", "DELETE"]) r.add(method, "/communities/:communityId/admin/rooms/:id/members/:userId", async (req) => {
+    await requireOwner(req);
+    const communityId = parse(uuid, req.params.communityId);
+    const roomId = parse(uuid, req.params.id);
+    const userId = parse(uuid, req.params.userId);
+    await setChannelMember(db, communityId, roomId, userId, method === "PUT");
+    if (method === "DELETE") await publishWithRetry(relay.bus, topics.room(roomId), { type: "membership.revoked", roomId, userId });
+    await changed(communityId);
+    return json(200, { ok: true });
   });
 
   r.add("GET", "/rooms", async (req) => {

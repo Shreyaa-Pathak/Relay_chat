@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
 import { sql } from "drizzle-orm";
-import type { ServerEvent } from "@relay/shared";
+import type { Room, ServerEvent } from "@relay/shared";
 import { loadEnv, type Env } from "../src/env.js";
 import { createDb, createPool } from "../src/db/client.js";
 import { runMigrations } from "../src/db/migrate.js";
@@ -33,7 +33,7 @@ export async function resetDb() {
   const pool = createPool(DATABASE_URL, 1);
   const db = createDb(pool);
   await runMigrations(db);
-  await db.execute(sql`truncate messages, memberships, sessions, users, rooms restart identity cascade`);
+  await db.execute(sql`truncate messages, memberships, sessions, users, rooms, invitations, seed_state, communities, community_memberships restart identity cascade`);
   await seedDefaultChannels(db);
   await pool.end();
 }
@@ -105,7 +105,7 @@ export class TestUser {
 
   static async register(baseUrl: string, name = "user"): Promise<TestUser> {
     const u = new TestUser(baseUrl);
-    const email = `${name}-${randomUUID().slice(0, 8)}@example.com`;
+    const email = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${randomUUID().slice(0, 8)}@example.com`;
     const r = await u.req("POST", "/auth/register", { email, password: "correct horse battery", displayName: name });
     if (r.status !== 201) throw new Error(`register failed: ${r.status} ${JSON.stringify(r.body)}`);
     u.id = r.body.user.id;
@@ -114,7 +114,7 @@ export class TestUser {
     return u;
   }
 
-  async rooms(): Promise<{ id: string; slug: string; isMember: boolean; lastSeq: number }[]> {
+  async rooms(): Promise<Room[]> {
     return (await this.req("GET", "/rooms")).body.rooms;
   }
 

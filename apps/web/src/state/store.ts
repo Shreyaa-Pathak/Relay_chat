@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Me, Room } from "@relay/shared";
+import type { Community, Me, Room } from "@relay/shared";
 import type { ConnectionStatus } from "../realtime/connection";
 import type { TypingState } from "../realtime/typing";
 import type { MessageIndex } from "./messages";
@@ -20,6 +20,7 @@ export interface Toast {
 
 export interface ChatState {
   me: Me | null;
+  communities: Community[];
   rooms: Room[];
   roomsState: LoadState;
   messages: Record<string, MessageIndex>;
@@ -40,6 +41,7 @@ export const initialLoad: LoadState = { loaded: false, loading: false, hasMore: 
 
 export const initialChatState = (): ChatState => ({
   me: null,
+  communities: [],
   rooms: [],
   roomsState: { ...initialLoad },
   messages: {},

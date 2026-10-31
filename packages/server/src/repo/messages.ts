@@ -28,8 +28,15 @@ const rows = <T>(r: { rows: unknown[] }) => r.rows as T[];
  */
 export async function sendMessage(db: Db, input: SendInput): Promise<SendResult> {
   return db.transaction(async (tx) => {
+    // Moderation locks this same user row, so a blocked account cannot race a send.
+    const active = await tx.execute(sql`select id from users where id = ${input.userId} and status = 'active' for share`);
+    if (!active.rows.length) throw new AppError("forbidden", "Your account does not have access");
+    const community = await tx.execute(sql`select c.id from communities c join rooms r on r.community_id = c.id
+      join community_memberships cm on cm.community_id = c.id and cm.user_id = ${input.userId}
+      where r.id = ${input.roomId} and cm.status = 'active' and not c.is_suspended for share of c, cm`);
+    if (!community.rows.length) throw new AppError("not_found", "Channel not found or access unavailable");
     const member = rows<{ ok: number }>(
-      await tx.execute(sql`select 1 as ok from memberships where room_id = ${input.roomId} and user_id = ${input.userId}`),
+      await tx.execute(sql`select 1 as ok from memberships where room_id = ${input.roomId} and user_id = ${input.userId} for share`),
     );
     if (member.length === 0) {
       const exists = rows(await tx.execute(sql`select 1 from rooms where id = ${input.roomId}`));

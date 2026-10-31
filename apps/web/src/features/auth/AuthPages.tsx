@@ -78,7 +78,7 @@ export function LoginPage() {
       footer={
         <>
           New here?{" "}
-          <Link to="/register" className="font-bold underline underline-offset-2">
+          <Link to="/register" state={{ from: to }} className="font-bold underline underline-offset-2">
             Create an account
           </Link>
         </>
@@ -139,7 +139,7 @@ export function RegisterPage() {
       footer={
         <>
           Already have one?{" "}
-          <Link to="/login" className="font-bold underline underline-offset-2">
+          <Link to="/login" state={{ from: to }} className="font-bold underline underline-offset-2">
             Sign in
           </Link>
         </>

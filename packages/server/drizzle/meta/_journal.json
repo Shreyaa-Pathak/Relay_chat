@@ -8,6 +8,34 @@
       "when": 1793291682731,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793436130405,
+      "tag": "0001_faithful_the_santerians",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793436342266,
+      "tag": "0002_demonic_scarlet_spider",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793437653398,
+      "tag": "0003_tan_blacklash",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793458861893,
+      "tag": "0004_strong_thena",
+      "breakpoints": true
     }
   ]
 }

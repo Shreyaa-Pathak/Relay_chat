@@ -6,7 +6,7 @@
   "packageManager": "pnpm@9.15.9",
   "engines": { "node": ">=22" },
   "scripts": {
-    "dev": "pnpm --filter @relay/shared build && pnpm -r --parallel --filter @relay/server --filter @relay/web --filter @relay/shared run dev",
+    "dev": "pnpm --filter @relay/shared build && pnpm db:migrate && pnpm --filter @relay/server db:seed && pnpm -r --parallel --filter @relay/server --filter @relay/web --filter @relay/shared run dev",
     "build": "pnpm -r --filter @relay/shared --filter @relay/server --filter @relay/web run build",
     "lint": "eslint .",
     "typecheck": "pnpm -r run typecheck && tsc -p api/tsconfig.json --noEmit",

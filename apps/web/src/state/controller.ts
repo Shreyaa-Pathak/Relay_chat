@@ -35,6 +35,7 @@ type Store = { getState: () => ChatState; setState: (p: Partial<ChatState> | ((s
 export class ChatController {
   readonly conn: RelayConnection;
   private trackers = new Map<string, SeqTracker>();
+  private presenceCommunityId: string | undefined;
   /** Seqs seen before the room's tracker was initialised by room.subscribed. */
   private early = new Map<string, number[]>();
   private gapTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -95,8 +96,13 @@ export class ChatController {
   async loadRooms() {
     this.set({ roomsState: { ...this.s.roomsState, loading: true, error: null } });
     try {
-      const { rooms } = await api.rooms();
-      this.set({ rooms, roomsState: { loaded: true, loading: false, hasMore: false, error: null } });
+      const [{ rooms }, { communities }] = await Promise.all([api.rooms(), api.communities()]);
+      const previous = new Set(this.memberRoomIds());
+      const added = rooms.filter((r) => r.isMember && !previous.has(r.id)).map((r) => r.id);
+      const removed = [...previous].filter((id) => !rooms.some((r) => r.id === id && r.isMember));
+      this.set({ rooms, communities, roomsState: { loaded: true, loading: false, hasMore: false, error: null } });
+      if (added.length) this.conn.send({ type: "room.subscribe", roomIds: added });
+      if (removed.length) this.conn.send({ type: "room.unsubscribe", roomIds: removed });
     } catch (e) {
       this.set({ roomsState: { ...this.s.roomsState, loading: false, error: (e as Error).message } });
     }
@@ -109,6 +115,7 @@ export class ChatController {
   private onReady() {
     const ids = this.memberRoomIds();
     if (ids.length) this.conn.send({ type: "room.subscribe", roomIds: ids });
+    if (this.presenceCommunityId) this.conn.send({ type: "presence.request", communityId: this.presenceCommunityId });
   }
 
   private async onUnauthorized() {
@@ -121,6 +128,9 @@ export class ChatController {
 
   private onEvent(e: ServerEvent) {
     switch (e.type) {
+      case "community.changed":
+        void this.loadRooms();
+        return;
       case "room.subscribed":
         for (const { roomId, lastSeq } of e.rooms) void this.onSubscribed(roomId, lastSeq);
         if (e.denied.length) this.set((s) => ({ rooms: s.rooms.map((r) => (e.denied.includes(r.id) ? { ...r, isMember: false } : r)) }));
@@ -150,9 +160,11 @@ export class ChatController {
         return;
       }
       case "presence.snapshot":
+        if (e.communityId && e.communityId !== this.presenceCommunityId) return;
         this.set({ presence: fromSnapshot(e.entries), serverOffset: e.serverTime - Date.now() });
         return;
       case "presence.update":
+        if (e.communityId && e.communityId !== this.presenceCommunityId) return;
         this.set((s) => ({ presence: e.state === "online" ? online(s.presence, e.entry) : offline(s.presence, e.entry.user.id, e.entry.connId) }));
         return;
       case "resync":
@@ -162,6 +174,7 @@ export class ChatController {
         if (e.userId === this.s.me?.id) {
           this.set((s) => ({ rooms: s.rooms.map((r) => (r.id === e.roomId ? { ...r, isMember: false } : r)) }));
           this.trackers.delete(e.roomId);
+          void this.loadRooms();
         }
         return;
       case "error":
@@ -333,6 +346,13 @@ export class ChatController {
 
   setActiveRoom(roomId: string | null) {
     this.set((s) => ({ activeRoomId: roomId, openThreadId: roomId === s.activeRoomId ? s.openThreadId : null, unread: roomId ? { ...s.unread, [roomId]: 0 } : s.unread }));
+  }
+
+  setPresenceCommunity(communityId: string | undefined) {
+    if (communityId === this.presenceCommunityId) return;
+    this.presenceCommunityId = communityId;
+    this.set({ presence: {} });
+    if (communityId) this.conn.send({ type: "presence.request", communityId });
   }
 
   async join(roomId: string) {

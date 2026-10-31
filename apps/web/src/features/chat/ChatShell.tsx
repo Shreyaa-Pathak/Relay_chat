@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router";
 import type { Me } from "@relay/shared";
+import { channelPath, communityPath, resolveCommunity } from "../../lib/paths";
 import { ChatController } from "../../state/controller";
 import { toast, useChat } from "../../state/store";
 import { Button } from "../../components/ui/Button";
@@ -39,12 +40,17 @@ export function ChatShell({ me }: { me: Me }) {
 }
 
 function ChatLayout() {
-  const { slug } = useParams();
+  const { slug, communityKey } = useParams();
   const ctl = useController();
-  const rooms = useChat((s) => s.rooms);
+  const allRooms = useChat((s) => s.rooms);
+  const communities = useChat((s) => s.communities);
+  const community = resolveCommunity(communities, communityKey);
+  const rooms = allRooms.filter((r) => r.communityId === community?.id);
   const roomsState = useChat((s) => s.roomsState);
   const [menuOpen, setMenuOpen] = useState(false);
   const room = rooms.find((r) => r.slug === slug);
+
+  useEffect(() => { ctl.setPresenceCommunity(community?.id); }, [ctl, community?.id]);
 
   useEffect(() => {
     ctl.setActiveRoom(room?.isMember ? room.id : null);
@@ -70,21 +76,26 @@ function ChatLayout() {
         )}
         aria-hidden={!menuOpen ? undefined : false}
       >
-        <Sidebar activeSlug={slug} onNavigate={() => setMenuOpen(false)} />
+        <Sidebar communityId={community?.id} activeSlug={slug} onNavigate={() => setMenuOpen(false)} />
       </div>
       {menuOpen && <button aria-label="Close channel list" className="fixed inset-0 z-30 bg-ink/40 md:hidden" onClick={() => setMenuOpen(false)} />}
       <main id="main" className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {!room?.isMember && <Button className="m-3 self-start md:hidden" onClick={() => setMenuOpen(true)}>Open channels</Button>}
         {!roomsState.loaded ? (
           roomsState.error ? (
             <CenterMessage title="Couldn't load channels" body={roomsState.error} action={<Button variant="primary" onClick={() => void ctl.loadRooms()}>Try again</Button>} />
           ) : (
             <CenterMessage title="Loading channels…" />
           )
+        ) : !community || !community.isMember ? (
+          <CenterMessage title="Choose a community" body="Open Discover communities in the sidebar to join a public community. Private communities require an invitation." />
+        ) : communityKey !== community.slug ? (
+          <Navigate to={slug ? channelPath(community.slug, slug) : communityPath(community.slug)} replace />
         ) : !room ? (
           slug ? (
-            <CenterMessage title={`#${slug} doesn't exist`} body="It may have been renamed or it's private." action={<Link className="font-bold underline" to="/c/general">Go to #general</Link>} />
+            <CenterMessage title={`#${slug} doesn't exist`} body="It may have been deleted or it's private. Open the channel list to choose another channel." action={rooms[0] ? <Link className="font-bold underline" to={channelPath(community.slug, rooms[0].slug)}>Go to #{rooms[0].name}</Link> : undefined} />
           ) : (
-            <Navigate to="/c/general" replace />
+            rooms[0] ? <Navigate to={channelPath(community.slug, rooms[0].slug)} replace /> : <CenterMessage title="No channels yet" body="Use Create channel in the sidebar, or ask the community owner to create one." />
           )
         ) : !room.isMember ? (
           <CenterMessage

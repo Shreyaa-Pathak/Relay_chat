@@ -19,7 +19,9 @@ import { AppError } from "../errors.js";
 import { ACCESS_COOKIE, parseCookies } from "../auth/cookies.js";
 import { verifyAccessToken } from "../auth/tokens.js";
 import { getMe, getUsersPublic } from "../repo/users.js";
-import { memberRoomSeqs } from "../repo/rooms.js";
+import { isMember, memberRoomSeqs } from "../repo/rooms.js";
+import { communityUserIds, DEFAULT_COMMUNITY_ID } from "../repo/communities.js";
+import { sql } from "drizzle-orm";
 import { sendMessage } from "../repo/messages.js";
 import { publishWithRetry } from "../bus/redis.js";
 import { TokenBucket } from "../ratelimit.js";
@@ -30,6 +32,7 @@ interface Conn {
   id: string;
   ws: WebSocket;
   user: UserPublic;
+  presenceCommunityId: string;
   /** Rooms this socket is subscribed to (membership verified at subscribe time). */
   rooms: Set<string>;
   topics: Set<string>;
@@ -94,7 +97,7 @@ export class Gateway {
 
     const userId = await verifyAccessToken(env.AUTH_SECRET, parseCookies(req)[ACCESS_COOKIE]);
     const user = userId ? await getMe(db, userId).catch(() => null) : null;
-    if (!user) {
+    if (!user || user.status !== "active") {
       ws.close(CloseCodes.Unauthorized, "unauthorized");
       return;
     }
@@ -104,6 +107,7 @@ export class Gateway {
       id: connId,
       ws,
       user: { id: user.id, displayName: user.displayName, avatarColor: user.avatarColor },
+      presenceCommunityId: DEFAULT_COMMUNITY_ID,
       rooms: new Set(),
       topics: new Set(),
       sendBucket: new TokenBucket(20, 2),
@@ -192,6 +196,11 @@ export class Gateway {
 
   private async onEvent(conn: Conn, ev: ClientEvent) {
     const { db } = this.relay;
+    const user = await getMe(db, conn.user.id);
+    if (!user || user.status !== "active") {
+      conn.ws.close(CloseCodes.Unauthorized, "Account access revoked");
+      return;
+    }
     switch (ev.type) {
       case "room.subscribe": {
         const ids = [...new Set(ev.roomIds)];
@@ -217,7 +226,7 @@ export class Gateway {
         await this.onSend(conn, ev);
         return;
       case "typing": {
-        if (!conn.rooms.has(ev.roomId)) {
+        if (!conn.rooms.has(ev.roomId) || !(await isMember(db, ev.roomId, conn.user.id))) {
           this.send(conn, { type: "error", code: "forbidden", message: "Subscribe to the channel first" });
           return;
         }
@@ -231,6 +240,7 @@ export class Gateway {
         return;
       }
       case "presence.request":
+        conn.presenceCommunityId = ev.communityId ?? DEFAULT_COMMUNITY_ID;
         await this.sendSnapshot(conn);
         return;
       case "bye":
@@ -282,15 +292,18 @@ export class Gateway {
   }
 
   private async sendSnapshot(conn: Conn) {
+    const communityId = conn.presenceCommunityId;
     try {
       const recs = await this.relay.presence.snapshot();
-      const users = await getUsersPublic(this.relay.db, [...new Set(recs.map((r) => r.userId))]);
+      const allowed = await communityUserIds(this.relay.db, communityId);
+      const visible = allowed.has(conn.user.id) ? recs.filter((r) => allowed.has(r.userId)) : [];
+      const users = await getUsersPublic(this.relay.db, [...new Set(visible.map((r) => r.userId))]);
       const entries: PresenceEntry[] = [];
-      for (const r of recs) {
+      for (const r of visible) {
         const u = users.get(r.userId);
         if (u) entries.push({ user: u, connId: r.connId, expiresAt: r.expiresAt });
       }
-      this.send(conn, { type: "presence.snapshot", entries, serverTime: Date.now() });
+      if (conn.presenceCommunityId === communityId) this.send(conn, { type: "presence.snapshot", entries, communityId, serverTime: Date.now() });
     } catch (err) {
       conn.log.warn("presence snapshot failed", { err: (err as Error).message });
     }
@@ -337,7 +350,21 @@ export class Gateway {
     this.relay.metrics.busEventsIn++;
     const lt = this.local.get(topic);
     if (!lt) return;
+    const presenceLookups = new Map<string, Promise<Set<string>>>();
     for (const conn of [...lt.conns]) {
+      if (event.type === "community.changed") {
+        void this.relay.db.execute(sql`select 1 from community_memberships where community_id = ${event.communityId} and user_id = ${conn.user.id}`).then((result) => {
+          if (result.rows.length) {
+            this.sendRaw(conn, raw);
+            if (conn.presenceCommunityId === event.communityId) void this.sendSnapshot(conn);
+          }
+        }).catch(() => undefined);
+        continue;
+      }
+      if (event.type === "account.revoked") {
+        if (event.userId === conn.user.id) conn.ws.close(CloseCodes.Unauthorized, "Account access revoked");
+        continue;
+      }
       if (event.type === "membership.revoked") {
         if (event.userId === conn.user.id) {
           this.unsubscribeRoom(conn, event.roomId);
@@ -346,7 +373,26 @@ export class Gateway {
         continue;
       }
       if (event.type === "typing" && event.user.id === conn.user.id) continue;
-      this.sendRaw(conn, raw);
+      if (event.type === "presence.update") {
+        const communityId = conn.presenceCommunityId;
+        let allowedUsers = presenceLookups.get(communityId);
+        if (!allowedUsers) {
+          allowedUsers = communityUserIds(this.relay.db, communityId);
+          presenceLookups.set(communityId, allowedUsers);
+        }
+        void allowedUsers.then((allowed) => {
+          if (conn.presenceCommunityId === communityId && allowed.has(conn.user.id) && allowed.has(event.entry.user.id)) this.send(conn, { ...event, communityId });
+        }).catch(() => undefined);
+        continue;
+      }
+      if (event.type === "message.new" || event.type === "typing") {
+        // Check current access even if a revocation broadcast was lost.
+        const roomId = event.type === "message.new" ? event.message.roomId : event.roomId;
+        void isMember(this.relay.db, roomId, conn.user.id).then((allowed) => {
+          if (allowed) this.sendRaw(conn, raw);
+          else this.unsubscribeRoom(conn, roomId);
+        }).catch(() => undefined);
+      } else this.sendRaw(conn, raw);
     }
   }
 

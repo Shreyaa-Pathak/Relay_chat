@@ -40,7 +40,7 @@ export class FakeSocket implements SocketLike {
   }
 }
 
-export const ME = { id: "00000000-0000-4000-8000-000000000001", email: "me@x.io", displayName: "Me", avatarColor: "green" as const };
+export const ME = { id: "00000000-0000-4000-8000-000000000001", email: "me@x.io", displayName: "Me", avatarColor: "green" as const, role: "member" as const, status: "active" as const };
 export const OTHER = { id: "00000000-0000-4000-8000-000000000002", displayName: "Bo", avatarColor: "amber" as const };
 export const ROOM = "10000000-0000-4000-8000-000000000001";
 

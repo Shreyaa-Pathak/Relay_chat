@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DoorOpen, Menu } from "lucide-react";
 import { useNavigate } from "react-router";
 import type { Room } from "@relay/shared";
+import { communityPath } from "../../lib/paths";
 import { useChat, toast } from "../../state/store";
 import { onlineUsers } from "../../state/presence";
 import { Button } from "../../components/ui/Button";
@@ -15,6 +16,7 @@ import { useController, useNow } from "./ChatContext";
 
 export function ChannelView({ room, onOpenMenu }: { room: Room; onOpenMenu: () => void }) {
   const ctl = useController();
+  const community = useChat((s) => s.communities.find((c) => c.id === room.communityId));
   const nav = useNavigate();
   const presence = useChat((s) => s.presence);
   const offset = useChat((s) => s.serverOffset);
@@ -67,7 +69,7 @@ export function ChannelView({ room, onOpenMenu }: { room: Room; onOpenMenu: () =
             await ctl.leave(room.id);
             toast(`You left #${room.name}`);
             setConfirmLeave(false);
-            nav("/c/general");
+            nav(community ? communityPath(community.slug) : "/communities");
           } catch (e) {
             toast((e as Error).message, "error");
           } finally {

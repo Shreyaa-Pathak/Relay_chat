@@ -42,11 +42,39 @@ export const UserPublic = z.object({
 });
 export type UserPublic = z.infer<typeof UserPublic>;
 
-export const Me = UserPublic.extend({ email: z.string() });
+export const MemberStatus = z.enum(["pending", "active", "rejected", "blocked"]);
+export const Me = UserPublic.extend({ email: z.string(), role: z.enum(["superadmin", "owner", "member"]).default("member"), status: MemberStatus.default("active") });
 export type Me = z.infer<typeof Me>;
+
+export const AdminMember = Me.extend({ roomIds: z.array(uuid) });
+export type AdminMember = z.infer<typeof AdminMember>;
+export const InviteInput = z.object({ email: emailSchema });
+export const AcceptInviteInput = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/, "This invitation link is invalid") });
+export const MemberStatusInput = z.object({ status: MemberStatus });
+export const CreateRoomInput = z.object({
+  slug: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{0,39}$/, "Use up to 40 lowercase letters, numbers or hyphens"),
+  name: z.string().trim().min(1).max(40),
+  topic: z.string().trim().max(250).default(""),
+  isPrivate: z.boolean().default(false),
+});
+export type CreateRoomInput = z.infer<typeof CreateRoomInput>;
+
+export const Community = z.object({
+  id: uuid, slug: z.string(), name: z.string(), description: z.string().nullable(),
+  isPrivate: z.boolean(), isMember: z.boolean(), role: z.enum(["owner", "member"]).nullable(),
+  isSuspended: z.boolean(), memberCount: z.number(),
+});
+export type Community = z.infer<typeof Community>;
+export const CreateCommunityInput = CreateRoomInput.omit({ topic: true }).extend({
+  description: z.string().trim().max(250).default(""), ownerEmail: emailSchema,
+});
+export type CreateCommunityInput = z.infer<typeof CreateCommunityInput>;
+export const CommunitySettingsInput = z.object({ isSuspended: z.boolean().optional(), ownerEmail: emailSchema.optional() })
+  .refine((v) => v.isSuspended !== undefined || v.ownerEmail !== undefined, "Choose a change");
 
 export const Room = z.object({
   id: uuid,
+  communityId: uuid,
   slug: z.string(),
   name: z.string(),
   topic: z.string().nullable(),

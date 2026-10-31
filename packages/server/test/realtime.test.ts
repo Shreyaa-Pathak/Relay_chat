@@ -125,7 +125,7 @@ describe("message flow across instances", () => {
 describe("authorization", () => {
   let secret: string;
   beforeAll(async () => {
-    const r = await db.execute(sql`insert into rooms (slug, name, is_private) values ('secret', 'secret', true) returning id`);
+    const r = await db.execute(sql`insert into rooms (community_id, slug, name, is_private) values ('00000000-0000-4000-8000-000000000001', 'secret', 'secret', true) returning id`);
     secret = (r.rows[0] as { id: string }).id;
     await db.execute(sql`insert into memberships (room_id, user_id) values (${secret}, ${a.id})`);
   });
