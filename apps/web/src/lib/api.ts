@@ -51,7 +51,7 @@ async function request<T>(method: string, path: string, body?: Json, retried = f
   } catch {
     throw new ApiError(0, "network", "Can't reach the Relay server. Check your connection.");
   }
-  if (res.status === 401 && !path.startsWith("/auth/") && !retried) {
+  if (res.status === 401 && (path === "/auth/me" || !path.startsWith("/auth/")) && !retried) {
     if (await refreshSession()) return request<T>(method, path, body, true);
     onSessionLost?.();
   }
