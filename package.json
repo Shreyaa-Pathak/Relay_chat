@@ -1,0 +1,33 @@
+{
+  "name": "relay",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @relay/shared build && pnpm -r --parallel --filter @relay/server --filter @relay/web --filter @relay/shared run dev",
+    "build": "pnpm -r --filter @relay/shared --filter @relay/server --filter @relay/web run build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r run typecheck && tsc -p api/tsconfig.json --noEmit",
+    "test": "pnpm -r run test",
+    "test:integration": "pnpm --filter @relay/server run test:integration",
+    "test:e2e": "pnpm --filter @relay/web run test:e2e",
+    "db:generate": "pnpm --filter @relay/server run db:generate",
+    "db:migrate": "pnpm --filter @relay/server run db:migrate",
+    "db:seed": "pnpm --filter @relay/shared build && pnpm --filter @relay/server run db:seed",
+    "db:setup": "pnpm db:migrate && pnpm db:seed",
+    "vercel-build": "pnpm build && pnpm db:migrate && pnpm db:seed"
+  },
+  "dependencies": {
+    "@relay/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@types/node": "22.19.1",
+    "eslint": "9.39.4",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "globals": "16.5.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.4"
+  }
+}

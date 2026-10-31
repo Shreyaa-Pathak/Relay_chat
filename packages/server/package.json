@@ -1,0 +1,42 @@
+{
+  "name": "@relay/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+  },
+  "files": ["dist", "drizzle"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch --clear-screen=false src/dev.ts",
+    "start": "node dist/dev.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file-if-exists=../../.env src/db/migrate-cli.ts",
+    "db:seed": "tsx --env-file-if-exists=../../.env src/db/seed-cli.ts"
+  },
+  "dependencies": {
+    "@relay/shared": "workspace:*",
+    "@vercel/functions": "3.10.4",
+    "bcryptjs": "3.0.3",
+    "drizzle-orm": "0.44.7",
+    "ioredis": "5.8.2",
+    "jose": "6.1.2",
+    "pg": "8.16.3",
+    "ws": "8.18.3",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/pg": "8.15.6",
+    "@types/ws": "8.18.1",
+    "drizzle-kit": "0.31.7",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}
