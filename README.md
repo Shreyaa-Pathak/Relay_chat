@@ -4,6 +4,8 @@ A self-owned, real-time community chat app with channels, threads, presence, typ
 reliable delivery and recoverable connections. It's built to run as a personal project on Vercel
 (Hobby) with Neon Postgres and Upstash Redis.
 
+![Relay chat showing the general channel, live messages, online members, and message composer](docs/images/relay-chat.png)
+
 - **Frontend:** React 19, Vite 7, Tailwind 4, React Router 7, react-virtuoso, Zustand, Radix Dialog,
   and lucide icons.
 - **Backend:** Node.js 22 and TypeScript on Vercel Functions, with `ws` WebSockets, Drizzle ORM on
@@ -23,7 +25,35 @@ pnpm db:setup        # migrate + seed #general #design #deploys #random
 pnpm dev             # app http://localhost:5173  (API/WS proxied to :3001)
 ```
 
+`pnpm dev` applies pending database migrations and runs the idempotent seed before starting the servers.
+If database preparation fails, startup stops so the app cannot run against an outdated schema.
+
 Open the app in two browser windows, create two accounts, and chat.
+
+New accounts can chat immediately in the default public community. Use **Discover communities**
+to join another public community without approval, and the community switcher to move between them.
+Private communities require an invitation. Each community has its own channels, owners and members.
+
+The first account is the **Superadmin** and owns the default community. **Manage communities** lets
+the superadmin create public/private communities, assign or replace their owners, suspend communities,
+and suspend accounts across the platform. An assigned owner must already have an active account.
+Superadmin access does not automatically grant access to private community conversations.
+
+Community owners use **Create channel**, **Invite people**, and **Members and channels**.
+The **Access** action on a channel adds or removes selected members, including for private channels.
+Blocking a member affects only that community; **Restore** returns their access to its default channels.
+Invitations require a private, single-use link and the matching signed-in email. New users can sign up
+from the link and then accept it. Links expire after seven days; share them manually because no email
+is sent. **New link** replaces a previous invitation link. Previously created pending invitations need
+a new link after the secure-invitation migration; existing memberships and message history are preserved.
+
+Run `pnpm db:migrate` before using communities on an existing database. The migration preserves
+channels and history in **Relay community**, preserves its owners and community blocks, and activates
+pending accounts. The earliest existing owner becomes superadmin (or the oldest account if none exists).
+Default channels seed once, so deleting one persists across subsequent deployments.
+
+The deployment remains Vercel Hobby + Neon Free + Upstash Free, with no new services or paid plans.
+Vercel Hobby is for personal, non-commercial use; free-tier usage limits still apply. See deployment docs.
 
 ## Scripts
 
@@ -72,8 +102,8 @@ if any are missing, the app shows a setup screen naming them (values are never s
 - **Rate limits are per function instance,** not global. Use Vercel Firewall rules for global limits.
 - **Performance targets:** the brief's targets (p95 < 80 ms, 50k messages/min, 5,000+ users) are
   unmeasured on Vercel, and p95 latency missed 80 ms in the local single-CPU test.
-- **Missing features:** no message editing or deletion, no creating channels from the UI (seeded and
-  SQL-created only), no file uploads, and no Storybook (components live in `apps/web/src/components/ui`).
+- **Missing features:** no message editing or deletion, no file uploads, and no Storybook
+  (components live in `apps/web/src/components/ui`).
 - **Avatars:** new users get lavender or amber avatars only.
 
 ## License
