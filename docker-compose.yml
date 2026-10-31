@@ -1,0 +1,23 @@
+# Local development services only. Production (Vercel variant) uses Neon + Upstash.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: relay
+      POSTGRES_PASSWORD: relay
+      POSTGRES_DB: relay
+    ports: ["5432:5432"]
+    volumes: ["relay-pg:/var/lib/postgresql/data", "./scripts/init-test-dbs.sql:/docker-entrypoint-initdb.d/init.sql:ro"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relay"]
+      interval: 2s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 20
+volumes:
+  relay-pg: {}
