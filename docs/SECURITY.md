@@ -19,6 +19,18 @@
     4401; the client then refreshes and reconnects.
   - Frames are capped at 16 KB.
 - **Authorization:**
+  - New accounts are active immediately. Public community joins require no approval; private
+    communities require an owner invitation. Community creation and platform suspension require superadmin.
+  - Community ownership is stored separately from the global account role. Owners manage only
+    their community, and a community block does not revoke access to other communities.
+  - Every channel operation also checks active community membership and community suspension.
+    REST admin routes bind the channel and member to the community in the URL.
+  - Presence snapshots and live presence updates are scoped to the selected community. Superadmins
+    do not implicitly receive private community message/history access.
+  - Private invitations require a random 256-bit single-use token plus the invited account's email.
+    Only its SHA-256 hash is stored. Links expire after seven days and use a URL fragment so the raw
+    token is not sent in page URLs or referrers. Signup alone never consumes an invitation or grants
+    private community access. Reissuing or revoking a link invalidates its previous token.
   - Membership is checked inside the send transaction, on `room.subscribe`, on every history and
     thread read, and for typing.
   - Private rooms return 404 to non-members.
@@ -38,6 +50,8 @@
   - Logs are structured JSON.
   - `password`, `token`, `cookie`, `body` and `secret` keys are always redacted.
   - Message bodies are never logged.
+  - Wrapped database errors omit SQL and parameters, which may contain private messages or secrets.
+  - Production refuses the published example AUTH_SECRET; use a randomly generated signing secret.
 - **Headers:** `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy` are set
   in `vercel.json`, and API responses are `no-store`.
 

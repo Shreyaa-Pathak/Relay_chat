@@ -89,6 +89,9 @@ commands. The Upstash pages checked don't say whether each *delivered* pub/sub m
 | --- | --- |
 | `users` | Accounts |
 | `sessions` | Hashed refresh tokens |
+| `communities` | Public/private communities, default community, suspension |
+| `community_memberships` | Community-scoped owner/member roles and active/blocked access |
+| `invitations` | Community + email invitations for accounts not yet registered |
 | `rooms` | `last_seq` counter, `is_private`, `is_default` |
 | `memberships` | Primary key on room + user |
 | `messages` | `seq`, `client_id`, `parent_id`, `reply_count` |
@@ -101,6 +104,14 @@ commands. The Upstash pages checked don't say whether each *delivered* pub/sub m
 | `(parent_id, seq)` | Thread paging |
 
 Threads are one level deep.
+
+Channels belong to a community; slugs are unique within that community. New accounts join the default
+public community immediately, and other public communities can be joined without approval. Community
+owners manage channels and invitations; the platform superadmin creates communities and assigns owners.
+Community and channel access are enforced for HTTP history, WebSocket subscriptions, sends, typing,
+and live delivery. Presence is filtered by the selected community. A `community.changed` bus event
+refreshes affected members' community/channel lists without polling. None of these features require
+another deployment, database or paid service per community.
 
 ## Code map
 

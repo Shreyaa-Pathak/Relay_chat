@@ -71,6 +71,19 @@ databases. This number says nothing either way about Vercel. The brief's other f
 messages/min, 5,000+ concurrent users) were not tested. They describe the full multi-node architecture,
 not the Hobby variant. No app rating exists yet.
 
+## Community feature verification
+
+Community feature verification (2026-10-31): production build, lint and TypeScript checks passed;
+54 unit tests and 42 integration tests passed. Integration tests used disposable local PostgreSQL 18
+and Redis services on separate ports. Browser coverage passed in installed Chrome: the nine existing
+desktop/mobile chat scenarios plus a new superadmin/community/private-channel access scenario.
+The optional screenshot-only suite was skipped; screenshots from the new scenario were visually reviewed.
+A separate legacy-data migration check preserved messages, owners, invitations and community blocks,
+and activated pending accounts. These are local results, not deployed free-tier capacity measurements.
+
+For isolated browser runs, set `E2E_DATABASE_URL`, `E2E_REDIS_URL`, `E2E_API_PORT` and `E2E_PORT`.
+Set `E2E_BROWSER_CHANNEL=chrome` to use installed Chrome instead of Playwright's bundled Chromium.
+
 ## Not run
 
 - Any test against a real Vercel, Neon or Upstash deployment (no credentials were available). See the
