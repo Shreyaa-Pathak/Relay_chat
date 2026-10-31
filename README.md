@@ -1,8 +1,9 @@
 # Relay
 
 A self-owned, real-time community chat app with channels, threads, presence, typing indicators,
-reliable delivery and recoverable connections. It's built to run as a personal project on Vercel
-(Hobby) with Neon Postgres and Upstash Redis.
+reliable delivery and recoverable connections.
+
+**Live site:** [getrelaychat.vercel.app](https://getrelaychat.vercel.app/)
 
 ![Relay chat showing the general channel, live messages, online members, and message composer](docs/images/relay-chat.png)
 
@@ -21,45 +22,85 @@ Requires Node 22+, pnpm 9, and Docker (or your own Postgres 16 and Redis).
 pnpm install
 docker compose up -d
 cp .env.example .env
-pnpm db:setup        # migrate + seed #general #design #deploys #random
 pnpm dev             # app http://localhost:5173  (API/WS proxied to :3001)
 ```
 
-`pnpm dev` applies pending database migrations and runs the idempotent seed before starting the servers.
-If database preparation fails, startup stops so the app cannot run against an outdated schema.
+`pnpm dev` applies pending database migrations and seeds the default channels (#general, #design,
+#deploys, #random) before starting the servers. If database preparation fails, startup stops so the
+app can't run against an outdated schema.
 
-Open the app in two browser windows, create two accounts, and chat.
+Open the app in two browser windows, create two accounts, and start chatting.
 
-New accounts can chat immediately in the default public community. Use **Discover communities**
-to join another public community without approval, and the community switcher to move between them.
-Private communities require an invitation. Each community has its own channels, owners and members.
+## Communities and roles
 
-The first account is the **Superadmin** and owns the default community. **Manage communities** lets
-the superadmin create public/private communities, assign or replace their owners, suspend communities,
-and suspend accounts across the platform. An assigned owner must already have an active account.
-Superadmin access does not automatically grant access to private community conversations.
+Relay is organised into **communities**. Each one has its own channels, owners and members. Communities
+are either **public** (anyone can join) or **private** (invitation only).
 
-Community owners use **Create channel**, **Invite people**, and **Members and channels**.
-The **Access** action on a channel adds or removes selected members, including for private channels.
-Blocking a member affects only that community; **Restore** returns their access to its default channels.
-Invitations require a private, single-use link and the matching signed-in email. New users can sign up
-from the link and then accept it. Links expire after seven days; share them manually because no email
-is sent. **New link** replaces a previous invitation link. Previously created pending invitations need
-a new link after the secure-invitation migration; existing memberships and message history are preserved.
+There are three kinds of account:
 
-Run `pnpm db:migrate` before using communities on an existing database. The migration preserves
-channels and history in **Relay community**, preserves its owners and community blocks, and activates
-pending accounts. The earliest existing owner becomes superadmin (or the oldest account if none exists).
-Default channels seed once, so deleting one persists across subsequent deployments.
+| Role | Who | What they can do |
+| --- | --- | --- |
+| **Member** | Everyone | Chat, join public communities, and browse and join channels |
+| **Community owner** | Assigned by the superadmin | Manage channels, members and invitations in their own community |
+| **Superadmin** | The first account created | Manage every community and account on the platform |
 
-The deployment remains Vercel Hobby + Neon Free + Upstash Free, with no new services or paid plans.
-Vercel Hobby is for personal, non-commercial use; free-tier usage limits still apply. See deployment docs.
+### Members
+
+New accounts can chat straight away in the default public community.
+
+- **Discover communities** (the globe icon next to the community switcher) lists public communities
+  you can join without approval.
+- The **community switcher** at the top of the sidebar moves you between communities you've joined.
+- **Browse channels** (the compass icon next to the "Channels" heading) lists the channels in the
+  current community.
+
+### Community owners
+
+Owners get **Create channel** (the **+** icon next to the "Channels" heading) and an **Admin tools**
+section at the bottom of the sidebar, which contains:
+
+- **Invite people:** create, revoke and refresh invitation links. See [Invitations](#invitations).
+- **Members and channels:** search and filter members, then:
+  - **Access** adds or removes people from a channel. Use it to choose who can see a private channel.
+  - **Block** removes a member from this community only. **Restore** gives them back access to the
+    community's default channels.
+  - **Delete** removes a channel along with all its messages and threads.
+
+### Superadmin
+
+The first account to sign up becomes the superadmin and owns the default community. Under
+**Admin tools → Manage communities**, the superadmin can:
+
+- Create public or private communities.
+- Assign or replace a community's owner. The new owner must already have an active account.
+- Suspend and restore communities.
+- Suspend and restore accounts across the whole platform.
+
+> Being superadmin does **not** grant access to conversations in private communities.
+
+### Invitations
+
+Private communities are joined by invitation:
+
+1. An owner creates an invitation for a specific email address in **Invite people**.
+2. The owner sends the link to that person themselves. Relay doesn't send email.
+3. The invited person opens the link while signed in with that email address. If they don't have an
+   account yet, they sign up from the link first and then accept the invitation.
+
+Each link works once and expires after **seven days**. **New link** creates a replacement and stops
+the old link from working.
+
+## Hosting costs
+
+Relay runs entirely on free tiers: Vercel Hobby, Neon Free and Upstash Free, with no extra
+services or paid plans. Vercel Hobby is for personal, non-commercial use, and free-tier usage limits
+still apply. See [Deployment](docs/DEPLOYMENT.md) for details.
 
 ## Scripts
 
 | Command | Does |
 | --- | --- |
-| `pnpm dev` | API/WebSocket server (watch) + Vite dev server |
+| `pnpm dev` | Migrate + seed, then API/WebSocket server (watch) + Vite dev server |
 | `pnpm build` | Build shared, server and web |
 | `pnpm lint` / `pnpm typecheck` | ESLint / TypeScript across the repo |
 | `pnpm test` | Unit tests (no services needed) |
@@ -86,25 +127,18 @@ if any are missing, the app shows a setup screen naming them (values are never s
 
 - [Architecture](docs/ARCHITECTURE.md): message flow, delivery semantics, reconnection, presence, data
   model, Redis budget.
-- [Deployment](docs/DEPLOYMENT.md): Vercel, Neon and Upstash setup, free-tier limits, and what's still
-  unverified.
+- [Deployment](docs/DEPLOYMENT.md): Vercel, Neon and Upstash setup, free-tier limits, and
+  post-deploy checks.
 - [Security](docs/SECURITY.md)
 - [Testing](docs/TESTING.md): how to run each suite and the recorded results.
 
 ## Known limitations
 
-- **Vercel deployment not yet tested end to end.** The `api/` contract matches Vercel's current docs.
-  Monorepo bundling, the REST rewrite and real latency still need a first deploy to confirm; see
-  `docs/DEPLOYMENT.md`.
 - **Connection lifetime:** Hobby closes every WebSocket within 300 s. Relay reconnects
   make-before-break and resyncs by sequence number, but every connection still churns every few
   minutes.
 - **Rate limits are per function instance,** not global. Use Vercel Firewall rules for global limits.
-- **Performance targets:** the brief's targets (p95 < 80 ms, 50k messages/min, 5,000+ users) are
-  unmeasured on Vercel, and p95 latency missed 80 ms in the local single-CPU test.
-- **Missing features:** no message editing or deletion, no file uploads, and no Storybook
-  (components live in `apps/web/src/components/ui`).
-- **Avatars:** new users get lavender or amber avatars only.
+- **Missing features:** no message editing or deletion, no file uploads, and no Storybook.
 
 ## License
 

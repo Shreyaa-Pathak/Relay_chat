@@ -7,12 +7,12 @@ truth for every message; Redis only moves events between function instances and 
  Browser (React)                    Vercel                                 Data
  ───────────────        ──────────────────────────────────         ─────────────────
  RelayConnection ─wss─▶ api/ws.ts      (Gateway, many instances) ─▶ Neon Postgres
-   (make-before-break)     │  validate → lock room row →             users, sessions, rooms,
- ChatController            │  idempotency check → seq+1 →            memberships, messages
+   (make-before-break)     │  validate → lock room row →             users, sessions, communities,
+ ChatController            │  idempotency check → seq+1 →            rooms, memberships, messages
    (optimistic, seq        │  insert → COMMIT                        (room.last_seq counter)
     tracking, gap fill)    │  then PUBLISH room:{id} ───────────▶ Upstash Redis
                            │  ◀── SUBSCRIBE room:{id} (refcounted)    pub/sub + presence ZSET
- fetch /api/v1/* ──────▶ api/server.ts  (REST: auth, rooms, history, threads, health)
+ fetch /api/v1/* ──────▶ api/server.ts  (REST: auth, communities, admin, rooms, history, threads, health)
 ```
 
 ## Message flow
@@ -91,7 +91,7 @@ commands. The Upstash pages checked don't say whether each *delivered* pub/sub m
 | `sessions` | Hashed refresh tokens |
 | `communities` | Public/private communities, default community, suspension |
 | `community_memberships` | Community-scoped owner/member roles and active/blocked access |
-| `invitations` | Community + email invitations for accounts not yet registered |
+| `invitations` | One per community + email: hashed single-use token, 7-day expiry |
 | `rooms` | `last_seq` counter, `is_private`, `is_default` |
 | `memberships` | Primary key on room + user |
 | `messages` | `seq`, `client_id`, `parent_id`, `reply_count` |
@@ -110,8 +110,7 @@ public community immediately, and other public communities can be joined without
 owners manage channels and invitations; the platform superadmin creates communities and assigns owners.
 Community and channel access are enforced for HTTP history, WebSocket subscriptions, sends, typing,
 and live delivery. Presence is filtered by the selected community. A `community.changed` bus event
-refreshes affected members' community/channel lists without polling. None of these features require
-another deployment, database or paid service per community.
+refreshes affected members' community/channel lists without polling.
 
 ## Code map
 

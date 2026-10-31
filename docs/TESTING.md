@@ -69,25 +69,19 @@ Postgres, Redis and k6.
 contention: k6 parsed about 1,270 frames per second on the same single core as both servers and both
 databases. This number says nothing either way about Vercel. The brief's other figures (50k
 messages/min, 5,000+ concurrent users) were not tested. They describe the full multi-node architecture,
-not the Hobby variant. No app rating exists yet.
+not the Hobby variant.
 
-## Community feature verification
+## Running browser tests in isolation
 
-Community feature verification (2026-10-31): production build, lint and TypeScript checks passed;
-54 unit tests and 42 integration tests passed. Integration tests used disposable local PostgreSQL 18
-and Redis services on separate ports. Browser coverage passed in installed Chrome: the nine existing
-desktop/mobile chat scenarios plus a new superadmin/community/private-channel access scenario.
-The optional screenshot-only suite was skipped; screenshots from the new scenario were visually reviewed.
-A separate legacy-data migration check preserved messages, owners, invitations and community blocks,
-and activated pending accounts. These are local results, not deployed free-tier capacity measurements.
-
-For isolated browser runs, set `E2E_DATABASE_URL`, `E2E_REDIS_URL`, `E2E_API_PORT` and `E2E_PORT`.
-Set `E2E_BROWSER_CHANNEL=chrome` to use installed Chrome instead of Playwright's bundled Chromium.
+To run the browser tests alongside a running `pnpm dev`, or against a separate database, set
+`E2E_DATABASE_URL`, `E2E_REDIS_URL`, `E2E_API_PORT` and `E2E_PORT`. To use an installed browser instead
+of Playwright's bundled Chromium, set `E2E_BROWSER_CHANNEL=chrome` (or `msedge`). Global setup calls
+`psql`, so it must be on your `PATH`.
 
 ## Not run
 
-- Any test against a real Vercel, Neon or Upstash deployment (no credentials were available). See the
-  "Not yet verified" list in `DEPLOYMENT.md`.
+- The automated suites against the live Vercel, Neon and Upstash deployment. See "What the live
+  deployment confirms" in `DEPLOYMENT.md`.
 - A load test on Vercel. Before running one, raise `REGISTER_LIMIT_PER_HOUR`, start at around 100
   users, and watch Upstash's command count, since a 2-minute run at 100 users uses thousands of
   commands.

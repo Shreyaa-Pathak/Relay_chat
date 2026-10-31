@@ -18,19 +18,20 @@ Sources: [Vercel WebSockets](https://vercel.com/docs/functions/websockets),
 **Not promised:** that the app stays free forever, or that no payment method will ever be requested.
 If Relay ever charges users or serves a business, Vercel requires a paid plan.
 
-## Communities on the existing free deployment
+All communities share one deployment, one Neon database and one Upstash bus, so the limits above
+apply to their combined usage.
 
-Communities share the same deployment, Neon database and Upstash bus. No paid plan, service or
-per-community deployment is added. This remains a personal/non-commercial pilot under Hobby's terms.
-Public signups and community joins require no owner approval; private spaces are invitation-only.
-The first account is superadmin. On upgrade, the earliest existing owner becomes superadmin, and
-existing channels/history move into the default community without changing their IDs.
+## Upgrading an existing deployment
 
-Apply migrations before starting the updated server (`pnpm db:migrate`, or the existing Vercel build
-command). Only the superadmin can create communities and assign owners; ownership is community-scoped.
-Monitor aggregate database storage, Redis commands and function usage across all communities.
-Migration `0004` adds secure invitation tokens. Generate new links for pending invitations created
-before that migration. Keep the existing production database; do not run test reset scripts against it.
+Apply migrations before starting the updated server (`pnpm db:migrate`, or the Vercel build command,
+which runs it). On a database from before communities existed:
+
+- existing channels and history move into the default community without changing their IDs;
+- the earliest existing owner becomes superadmin (or the oldest account, if there are no owners);
+- migration `0004` adds secure invitation tokens, so pending invitations created before it need a
+  **New link**.
+
+Keep the existing production database, and never run the test reset scripts against it.
 
 ## 1. Neon
 
@@ -85,21 +86,21 @@ the variable names in `.env.example`, so map the injected values onto those name
 4. Run the load test against the deployment (see `docs/TESTING.md`). Raise `REGISTER_LIMIT_PER_HOUR`
    for the run, then put it back.
 
-## Not yet verified on a real deployment
+## What the live deployment confirms
 
-The exact Vercel API entry points were smoke-tested locally with rewrites, auth cookies and WebSocket
-message acknowledgements. The deployment command, migrations and seed were tested on a disposable
-database. A real Vercel, Neon and Upstash deployment has not been exercised by this QA run.
+On 2026-10-31, `https://getrelaychat.vercel.app/api/v1/ready` returned
+`{"ok":true,"database":true,"bus":true}`. That confirms Vercel bundles `@relay/server` into the
+`api/*.ts` functions, the `/api/v1/:path*` rewrite reaches `api/server.ts`, and Neon and Upstash are
+reachable.
 
-- **Monorepo bundling:** Vercel tracing `@relay/server` (a pnpm workspace package compiled to `dist/`)
-  into the `api/*.ts` function bundles.
-- **REST rewrite:** whether Vercel keeps the original path in `req.url` for the `/api/v1/:path*` →
-  `/api/server?__path=:path*` rewrite. The server handles both cases.
-- **WebSocket upgrade:** the handshake reaching `api/ws.ts` with cookies and `Origin` intact.
+Still unmeasured:
+
+- **WebSocket upgrade:** the handshake reaching `api/ws.ts` with cookies and `Origin` intact. Step 3
+  of [Verify](#4-verify) checks it.
 - **Real latency and usage:** latency on Vercel and real Upstash command consumption.
 
-If a deploy fails at one of these, the function logs on Vercel will name the problem.
-`api/server.ts` and `api/ws.ts` are thin, so swapping in a different bundling approach is a small change.
+If a deploy fails, the function logs on Vercel will name the problem. `api/server.ts` and `api/ws.ts`
+are thin, so swapping in a different bundling approach is a small change.
 
 ## Local development
 
@@ -107,8 +108,7 @@ If a deploy fails at one of these, the function logs on Vercel will name the pro
 pnpm install
 docker compose up -d                    # Postgres 16 + Redis 7 (also creates relay_test, relay_e2e)
 cp .env.example .env
-pnpm db:setup                           # migrations + seed
-pnpm dev                                # API + WS on :3001, app on http://localhost:5173
+pnpm dev                                # migrations + seed, then API + WS on :3001, app on :5173
 ```
 
 Without Docker: point `DATABASE_URL` at any Postgres 16 and either run Redis locally or set
